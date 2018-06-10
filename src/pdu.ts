@@ -1,5 +1,13 @@
 import { sevenBitEsc, sevenBitDefault } from "./bit";
-
+export type pduMessage = {
+    smsc: string, 
+    smsc_type: number, 
+    receiver: string, 
+    receiver_type: number,
+    encoding: "16bit" | "8bit"|"7bit",
+    text: string,
+    request_status: boolean
+}
 export class PDUParser
 {
     public static Parse(pdu: string)
@@ -104,7 +112,141 @@ export class PDUParser
 
         return obj;
     }
-
+    /**
+     * Encodes message into PDU format
+     * http://www.developershome.com/sms/cmgsCommand4.asp
+     */
+    public static Generate(message: pduMessage): Array<string>
+    {
+        var smsc = '';
+        var smscPartLength = 0;
+    
+        if (message.smsc!==undefined){
+            if (message.smsc_type!==undefined && (message.smsc_type==0x81 || message.smsc_type==0x91)){
+                smsc += message.smsc_type.toString (16);
+            } else {
+                smsc += '81';
+            }
+            smsc += this.swapNibbles(message.smsc);
+            var smsc_length = this.octetLength(smsc);
+            smsc = smsc_length + smsc;
+        } else {
+            smsc = '00';
+        }
+        var pdu = smsc;
+        smscPartLength = smsc.length;
+    
+        var parts = 1;
+        var inTextNumberArray = this.messageToNumberArray(message);
+    
+        if(message.encoding === '16bit' && inTextNumberArray.length > 70)
+            parts = inTextNumberArray.length / 66;
+    
+        else if(message.encoding === '7bit' && inTextNumberArray.length > 160)
+            parts = inTextNumberArray.length / 153;
+    
+        parts = Math.ceil(parts);
+    
+        let TPMTI  = 1<<0; //(2 bits) type msg, 1=submit by MS
+        let TPRD   = 1<<2; //(1 bit) reject duplicates
+        let TPVPF  = 1<<3; //(2 bits) validaty f. : 0=not pres, 1=enhanc,2=relative,3=absolute
+        let TPSRR  = 1<<5; //(1 bit) want status reply
+        let TPUDHI = 1<<6; //(1 bit) 1=header+data, 0=only data
+        let TPRP   = 1<<7; //(1 bit) reply-path
+    
+        var submit = TPMTI;
+    
+        if(parts > 1) //UDHI
+            submit = submit | TPUDHI;
+    
+        if (message.request_status!==undefined && message.request_status)
+            submit = submit | TPSRR;
+        pdu += ('00'+submit.toString(16)).slice(-2);
+        pdu += '00'; //Reference Number;
+        var receiverSize = ('00'+(parseInt(<any>message.receiver.length, 10).toString(16))).slice(-2);
+        var receiver = this.swapNibbles(message.receiver);
+    
+        //Destination MSISDN type
+        var receiverType;
+        if (message.receiver_type !== undefined && (message.receiver_type === 0x81 || message.receiver_type === 0x91)){
+            receiverType = message.receiver_type.toString(16);
+        } else {
+            receiverType = 81;
+        }
+        pdu += (<number><any>receiverSize).toString(16) + receiverType + receiver;
+        pdu += '00'; //TODO TP-PID
+    
+        if(message.encoding === '16bit')
+            pdu += '08';
+        else if(message.encoding === '7bit')
+            pdu += '00';
+    
+        var pdus = new Array();
+    
+        var csms = this.randomHexa(2); // CSMS allows to give a reference to a concatenated message
+    
+        for(var i=0; i< parts; i++) {
+            pdus[i] = pdu;
+    
+            if(message.encoding === '16bit') {
+                /* If there are more than one messages to be sent, we are going to have to put some UDH. Then, we would have space only
+                 * for 66 UCS2 characters instead of 70 */
+                if(parts === 1)
+                    var length = 70;
+                else
+                    var length = 66;
+    
+            } else if(message.encoding === '7bit') {
+                /* If there are more than one messages to be sent, we are going to have to put some UDH. Then, we would have space only
+                 * for 153 ASCII characters instead of 160 */
+                if(parts === 1)
+                    var length = 160;
+                else
+                    var length = 153;
+            } else if(message.encoding === '8bit') {
+    
+            }
+            var text = inTextNumberArray.slice(i*length, (i*length)+length);
+    
+            var user_data;
+            if(message.encoding === '16bit') {
+                user_data = this.encode16Bit(text);
+                var size = (user_data.length / 2);
+    
+                if(parts > 1)
+                    size += 6; //6 is the number of data headers we append.
+    
+            } else if(message.encoding === '7bit') {
+                if(parts > 1){
+                    user_data = this.encode7Bit(text,1);
+                    var size = 7 + text.length;
+                }
+                else {
+                    user_data = this.encode7Bit(text);
+                    var size = text.length;
+                }
+            }
+    
+            pdus[i] += ('00'+parseInt(<any>size).toString(16)).slice(-2);
+    
+            // UDHI control header for concaterating message's parts
+            if(parts > 1) {
+                pdus[i] += '05';
+                pdus[i] += '00';
+                pdus[i] += '03';
+                pdus[i] +=  csms;
+                pdus[i] += ('00'+parts.toString(16)).slice(-2);
+                pdus[i] += ('00'+(i+1).toString(16)).slice(-2);
+            }
+            pdus[i] += user_data;
+            pdus[i] = {
+                tpdu_length: (pdus[i].length - smscPartLength)/2,
+                smsc_tpdu: pdus[i].toUpperCase()
+            };
+        }
+    
+        return pdus;
+    }
     public static detectEncoding(dataCodingScheme: string|number): "7bit"|"8bit"|"16bit"
     {
         if (typeof dataCodingScheme === 'string') dataCodingScheme = parseInt(dataCodingScheme, 16);
