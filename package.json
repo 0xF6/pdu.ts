@@ -1,6 +1,6 @@
 {
   "name": "pdu.ts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Protocol Data Unit Implementation for TypeScript",
   "main": "./build/index.js",
   "repository": "https://github.com/0xF6/pdu.ts.git",
