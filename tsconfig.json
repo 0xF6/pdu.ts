@@ -17,13 +17,15 @@
     },
     "filesGlob": [
         "./src/**/*.ts",
-        "!node_modules/**/*"
+        "!node_modules/**/*",
+        "!index.d.ts"
     ],
     "exclude": [
         "node_modules",
         "test",
         "dist",
-        "build"
+        "build",
+        "index.d.ts"
     ],
     "compileOnSave": true
 }

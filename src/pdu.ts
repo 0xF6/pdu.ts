@@ -124,7 +124,7 @@ export class PDUParser
             return '16bit';
     }
 
-    public static decode16Bit(data: Array<{}>, length: number): string
+    public static decode16Bit(data: string, length: number): string
     {
         var ucs2 = '';
         for(var i = 0; i <= data.length - 1;i = i + 4) {
