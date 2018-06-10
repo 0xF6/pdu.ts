@@ -6,6 +6,19 @@
   "repository": "https://github.com/0xF6/pdu.ts.git",
   "author": "Yuuki Wesp",
   "license": "MIT",
+  "keywords": [
+    "typescript",
+    "pdu",
+    "protocol",
+    "data",
+    "unit",
+    "gsm",
+    "modem"
+  ],
+  "bugs": {
+    "url": "https://github.com/0xF6/pdu.ts/issues"
+  },
+  "homepage": "https://github.com/0xF6/pdu.ts#readme",
   "devDependencies": {
     "@types/node": "^10.3.2",
     "typescript": "^2.9.1"
